@@ -152,6 +152,73 @@
           </div>
         </div>
       </dialog>
+
+      <!-- Right-click Context Menu -->
+      <nav id="ctx-menu" class="ctx-menu" role="menu">
+        <div class="ctx-item" data-action="new-tab" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
+          <span class="ctx-label">New Tab</span>
+          <span class="ctx-shortcut">Ctrl+T</span>
+        </div>
+        <div class="ctx-item" data-action="new-window" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+          </span>
+          <span class="ctx-label">New Window</span>
+        </div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" data-action="back" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </span>
+          <span class="ctx-label">Back</span>
+          <span class="ctx-shortcut">Alt+←</span>
+        </div>
+        <div class="ctx-item" data-action="forward" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </span>
+          <span class="ctx-label">Forward</span>
+          <span class="ctx-shortcut">Alt+→</span>
+        </div>
+        <div class="ctx-item" data-action="reload" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </span>
+          <span class="ctx-label">Reload</span>
+          <span class="ctx-shortcut">Ctrl+R</span>
+        </div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" data-action="copy-url" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </span>
+          <span class="ctx-label">Copy URL</span>
+        </div>
+        <div class="ctx-item" data-action="toggle-sidebar" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+          </span>
+          <span class="ctx-label">Toggle Sidebar</span>
+          <span class="ctx-shortcut">Ctrl+B</span>
+        </div>
+        <div class="ctx-item" data-action="devtools" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </span>
+          <span class="ctx-label">DevTools</span>
+        </div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item danger" data-action="close-tab" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </span>
+          <span class="ctx-label">Close Tab</span>
+          <span class="ctx-shortcut">Ctrl+W</span>
+        </div>
+      </nav>
     </div>
     <script src="ui.js"></script>
   </body>

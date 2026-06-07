@@ -85,6 +85,16 @@
         if(key!=="Tab"||isMod){e.preventDefault();e.stopPropagation();}
       }
     },true);
+    if(window.__eyebrow_ctx_injected)return;
+    window.__eyebrow_ctx_injected=true;
+    document.addEventListener("contextmenu",function(e){
+      e.preventDefault();
+      console.log("eyebrow-ctx:"+JSON.stringify({x:e.clientX,y:e.clientY}));
+    },true);
+    document.addEventListener("mousedown",function(e){
+      if(e.button!==0)return;
+      console.log("eyebrow-click");
+    },true);
   })();`;
 
   function injectKeyboardListener(view) {
@@ -113,6 +123,14 @@
           const data = JSON.parse(e.message.substring("eyebrow-keydown:".length));
           handleForwardedKeyEvent(data);
         } catch (err) {}
+      } else if (e.message && e.message.startsWith("eyebrow-ctx:")) {
+        try {
+          const data = JSON.parse(e.message.substring("eyebrow-ctx:".length));
+          const rect = view.getBoundingClientRect();
+          openCtxMenu(rect.left + data.x, rect.top + data.y);
+        } catch (err) {}
+      } else if (e.message === "eyebrow-click") {
+        closeCtxMenu();
       }
     });
 
@@ -980,6 +998,83 @@
     }
   }
 
+  /* ─── context menu ──────────────────────────────── */
+
+  const ctxMenu = $("ctx-menu");
+
+  function openCtxMenu(x, y) {
+    ctxMenu.style.left = "0px";
+    ctxMenu.style.top = "0px";
+    ctxMenu.style.display = "flex";
+
+    const rect = ctxMenu.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = 8;
+
+    let left = x;
+    let top = y;
+
+    if (left + rect.width > vw - pad) left = vw - rect.width - pad;
+    if (left < pad) left = pad;
+    if (top + rect.height > vh - pad) top = vh - rect.height - pad;
+    if (top < pad) top = pad;
+
+    ctxMenu.style.left = left + "px";
+    ctxMenu.style.top = top + "px";
+
+    requestAnimationFrame(() => ctxMenu.classList.add("open"));
+  }
+
+  function closeCtxMenu() {
+    ctxMenu.classList.remove("open");
+    setTimeout(() => {
+      if (!ctxMenu.classList.contains("open")) {
+        ctxMenu.style.display = "none";
+      }
+    }, 200);
+  }
+
+  function handleCtxAction(action) {
+    switch (action) {
+      case "new-tab":
+        openPalette("", true);
+        break;
+      case "new-window":
+        chrome.windows.create({ focused: true });
+        break;
+      case "back":
+        withActiveView((v) => v.back && v.back());
+        break;
+      case "forward":
+        withActiveView((v) => v.forward && v.forward());
+        break;
+      case "reload":
+        if (state.activeId != null) chrome.tabs.reload(state.activeId);
+        break;
+      case "copy-url":
+        if (state.activeId != null) {
+          const active = state.tabs.find((t) => t.id === state.activeId);
+          if (active && active.url) {
+            navigator.clipboard.writeText(active.url).catch(() => {});
+          }
+        }
+        break;
+      case "toggle-sidebar":
+        toggleSidebar();
+        break;
+      case "devtools":
+        if (typeof vivaldi !== "undefined" && vivaldi.devtoolsPrivate) {
+          vivaldi.devtoolsPrivate.toggleDevtools(state.windowId, "console");
+        }
+        break;
+      case "close-tab":
+        if (state.activeId != null) chrome.tabs.remove(state.activeId);
+        break;
+    }
+    closeCtxMenu();
+  }
+
   /* ─── bindings ──────────────────────────────────── */
 
   function bindUI() {
@@ -1064,7 +1159,11 @@
       "keydown",
       (e) => {
         if (e.key !== "Escape") return;
-        if (palette.open) {
+        if (ctxMenu.classList.contains("open")) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          closeCtxMenu();
+        } else if (palette.open) {
           e.preventDefault();
           e.stopImmediatePropagation();
           closePalette();
@@ -1125,6 +1224,25 @@
     });
 
     window.addEventListener("resize", closeAllPopups);
+
+    // Context menu
+    document.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openCtxMenu(e.clientX, e.clientY);
+    });
+
+    ctxMenu.addEventListener("click", (e) => {
+      const item = e.target.closest(".ctx-item");
+      if (item) handleCtxAction(item.dataset.action);
+    });
+
+    document.addEventListener("mousedown", (e) => {
+      if (!ctxMenu.contains(e.target)) closeCtxMenu();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeCtxMenu();
+    });
   }
 
   function handleForwardedKeyEvent(e) {
@@ -1167,7 +1285,9 @@
           break;
       }
     } else if (key === "Escape") {
-      if (palette.open) {
+      if (ctxMenu.classList.contains("open")) {
+        closeCtxMenu();
+      } else if (palette.open) {
         closePalette();
       } else if (state.popups.length) {
         closeAllPopups();
