@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>eyebrow</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body>
+    <div id="app">
+      <main id="main">
+        <!-- The guest webviews will be rendered inside here -->
+        <div id="viewport"></div>
+
+        <!-- Zen New Tab Dashboard Page -->
+        <div id="zen-page" class="zen-page">
+          <div class="zen-content">
+            <div class="zen-time-container">
+              <div id="zen-clock" class="zen-clock">12:00 PM</div>
+              <div id="zen-date" class="zen-date">Monday, January 1</div>
+            </div>
+            
+            <h1 id="zen-greeting" class="zen-greeting">Hello, Gaurish</h1>
+            
+            <div id="zen-search-wrapper" class="zen-search-wrapper">
+              <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              <input id="zen-search-trigger" type="text" placeholder="Where to next?" readonly />
+              <span class="search-shortcut"><kbd>Ctrl</kbd>+<kbd>T</kbd></span>
+            </div>
+
+            <div class="zen-shortcuts-section">
+              <div class="section-header">
+                <h2>Favorites</h2>
+                <button id="add-dial-btn" title="Add favorite shortcut" class="icon-btn">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+              </div>
+              <div id="zen-speed-dial" class="zen-speed-dial">
+                <!-- Dynamically loaded speed dial cards -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- Add Shortcut Dialog -->
+          <dialog id="dial-dialog" class="dial-dialog">
+            <div class="dial-dialog-box">
+              <h3>Add Favorite Shortcut</h3>
+              <div class="input-group">
+                <label for="dial-name">Name</label>
+                <input id="dial-name" type="text" placeholder="GitHub" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="input-group">
+                <label for="dial-url">URL</label>
+                <input id="dial-url" type="text" placeholder="github.com" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="form-actions">
+                <button type="button" id="dial-cancel" class="btn secondary">Cancel</button>
+                <button type="button" id="dial-save" class="btn primary">Save Shortcut</button>
+              </div>
+            </div>
+          </dialog>
+        </div>
+
+        <!-- Initial Blank Screen State (when no tabs exist) -->
+        <div id="empty" class="empty">
+          <div class="logo">eyebrow</div>
+          <div class="hint">press <kbd>Ctrl</kbd>+<kbd>T</kbd> to open something</div>
+          <button id="empty-new">new tab</button>
+        </div>
+      </main>
+
+      <!-- Sidebar Toggle Floating Trigger (visible when sidebar is hidden) -->
+      <button id="reveal" class="reveal" title="Show sidebar (Ctrl+B)">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Left Vertical Sidebar -->
+      <aside id="sidebar">
+        <!-- Navigation Buttons -->
+        <div class="nav-row">
+          <button id="back" title="Back" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <button id="forward" title="Forward" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+          <button id="reload" title="Reload" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <div class="spacer"></div>
+          <button id="newtab" title="New tab (Ctrl+T)" class="icon accent">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="toggle" title="Hide sidebar (Ctrl+B)" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+          </button>
+        </div>
+
+        <!-- Sidebar Omnibox -->
+        <div class="omnibox">
+          <div class="omnibox-wrapper">
+            <input id="url" type="text" spellcheck="false" placeholder="navigate this tab..." />
+            <span class="omnibox-hint"><kbd>Ctrl</kbd>+<kbd>L</kbd></span>
+          </div>
+        </div>
+
+        <!-- Vertical Tabs List -->
+        <div id="tabs" class="tabs"></div>
+
+        <!-- Footer Control Area & Extensions Tray -->
+        <div class="sidebar-footer">
+          <div id="extensions" class="extensions"></div>
+          <div class="spacer"></div>
+          <button id="manage-ext" title="Manage extensions" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </button>
+          <button id="devtools" title="DevTools (this shell)" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Raycast/Spotlight Command Palette -->
+      <dialog id="palette" class="palette">
+        <div class="palette-box">
+          <div class="palette-input-wrapper">
+            <div class="palette-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </div>
+            <input id="palette-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search tabs, bookmarks, history, or enter URL..." />
+            <button id="palette-close" class="palette-close" title="Close (Esc)">&times;</button>
+          </div>
+          
+          <!-- Search Results Area -->
+          <div id="palette-results" class="palette-results"></div>
+          
+          <!-- Keyboard shortcuts helper footer -->
+          <div class="palette-hint">
+            <span><kbd>▲</kbd> <kbd>▼</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>Ctrl</kbd>+<kbd>↵</kbd> open in new tab</span>
+            <span><kbd>esc</kbd> dismiss</span>
+          </div>
+        </div>
+      </dialog>
+    </div>
+    <script src="ui.js"></script>
+  </body>
+</html>
