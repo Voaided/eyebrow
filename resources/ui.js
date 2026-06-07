@@ -189,10 +189,15 @@
 
   function isBlankTab(tab) {
     if (!tab) return true;
-    const blankUrls = ["chrome://newtab/", "about:blank", "vivaldi://newtab/", ""];
-    const urlBlank = blankUrls.includes(tab.url);
-    const pendingBlank = !tab.pendingUrl || blankUrls.includes(tab.pendingUrl);
-    return urlBlank && pendingBlank;
+    const isBlankUrl = (url) =>
+      !url ||
+      url === "" ||
+      url === "about:blank" ||
+      url === "chrome://newtab/" ||
+      url === "vivaldi://newtab/" ||
+      url === "vivaldi://startpage/" ||
+      url === "vivaldi://speeddial/";
+    return isBlankUrl(tab.url) && (!tab.pendingUrl || isBlankUrl(tab.pendingUrl));
   }
 
   function syncViews() {
@@ -1185,6 +1190,23 @@
   }
 
   function bindBrowserEvents() {
+    if (typeof vivaldi !== "undefined" && vivaldi.tabsPrivate && vivaldi.tabsPrivate.onKeyboardShortcut) {
+      vivaldi.tabsPrivate.onKeyboardShortcut.addListener((windowId, shortcut) => {
+        if (windowId !== state.windowId) return;
+        const s = (shortcut || "").toLowerCase().replace(/\s/g, "");
+        if (s === "ctrl+t") {
+          openPalette("", true);
+        }
+      });
+    }
+
+    chrome.tabs.onCreated.addListener((tab) => {
+      if (tab.windowId !== state.windowId) return;
+      if (suppressPaletteAutoOpen) return;
+      openPalette("", true);
+      suppressPaletteAutoOpen = true;
+    });
+
     const tabEvts = [
       "onCreated",
       "onUpdated",
