@@ -88,7 +88,7 @@ kbd {
 #viewport {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: var(--bg);
   border-radius: 0;
   transition: var(--transition);
 }

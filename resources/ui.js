@@ -27,6 +27,8 @@
   let lastQuery = "";
   let lastActiveId = null;
   let clockInterval = null;
+  let paletteNewTabMode = false;
+  let suppressPaletteAutoOpen = false;
 
   const DEFAULT_SPEED_DIALS = [
     { name: "GitHub", url: "https://github.com" },
@@ -185,6 +187,14 @@
     }
   }
 
+  function isBlankTab(tab) {
+    if (!tab) return true;
+    const blankUrls = ["chrome://newtab/", "about:blank", "vivaldi://newtab/", ""];
+    const urlBlank = blankUrls.includes(tab.url);
+    const pendingBlank = !tab.pendingUrl || blankUrls.includes(tab.pendingUrl);
+    return urlBlank && pendingBlank;
+  }
+
   function syncViews() {
     const ids = new Set(state.tabs.map((t) => t.id));
     for (const node of viewportEl.querySelectorAll(".view")) {
@@ -193,11 +203,7 @@
     }
 
     const activeTab = state.tabs.find((t) => t.id === state.activeId);
-    const isNewTab = !activeTab || 
-                     activeTab.url === "chrome://newtab/" || 
-                     activeTab.url === "about:blank" || 
-                     activeTab.url === "vivaldi://newtab/" ||
-                     activeTab.url === "";
+    const isNewTab = isBlankTab(activeTab);
 
     for (const tab of state.tabs) {
       const v = ensureView(tab.id);
@@ -229,15 +235,7 @@
   function syncOmnibox() {
     if (document.activeElement === urlInput) return;
     const active = state.tabs.find((t) => t.id === state.activeId);
-    
-    // Don't show new tab url in omnibox
-    const isNewTab = !active || 
-                     active.url === "chrome://newtab/" || 
-                     active.url === "about:blank" || 
-                     active.url === "vivaldi://newtab/" ||
-                     active.url === "";
-                     
-    urlInput.value = isNewTab ? "" : (active?.url || "");
+    urlInput.value = isBlankTab(active) ? "" : (active?.url || "");
   }
 
   async function refreshTabs() {
@@ -253,15 +251,10 @@
     // Auto-open palette when focusing on a new blank tab
     if (state.activeId !== lastActiveId) {
       lastActiveId = state.activeId;
-      if (active) {
-        const isNewTab = active.url === "chrome://newtab/" || 
-                         active.url === "about:blank" || 
-                         active.url === "vivaldi://newtab/" ||
-                         active.url === "";
-        if (isNewTab) {
-          openPalette();
-        }
+      if (active && !suppressPaletteAutoOpen && isBlankTab(active)) {
+        openPalette("", false);
       }
+      suppressPaletteAutoOpen = false;
     }
   }
 
@@ -277,7 +270,8 @@
 
   /* ─── command palette (zen-style "new tab") ─────── */
 
-  function openPalette(prefill) {
+  function openPalette(prefill, newTabMode = false) {
+    paletteNewTabMode = newTabMode;
     // blur webviews
     for (const wv of document.querySelectorAll("webview")) {
       try { wv.blur(); } catch (_) {}
@@ -317,8 +311,9 @@
   function submitPalette(openInNewTab = false) {
     const url = smartUrl(paletteInput.value);
     if (!url) return closePalette();
-    
-    if (openInNewTab || state.activeId == null) {
+    suppressPaletteAutoOpen = true;
+
+    if (openInNewTab || paletteNewTabMode || state.activeId == null) {
       chrome.tabs.create({
         windowId: state.windowId,
         url,
@@ -364,10 +359,27 @@
     return [];
   }
 
+  function looksLikeUrl(input) {
+    const v = input.trim();
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(v) ||
+           /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(v) ||
+           v.startsWith("localhost");
+  }
+
   async function searchAll(query) {
     if (!query) return [];
     const results = [];
     const queryLower = query.toLowerCase();
+
+    // URL navigate result at the top
+    if (looksLikeUrl(query)) {
+      results.push({
+        type: "navigate",
+        title: query.startsWith("http") ? query : "https://" + query,
+        subtitle: "Navigate to URL",
+        url: query.startsWith("http") ? query : "https://" + query,
+      });
+    }
 
     // 1. Matches in open tabs
     const openTabs = state.tabs.filter(t => 
@@ -569,11 +581,12 @@
       return;
     }
 
-    if (item.type === "tab" && !openInNewTab) {
+    suppressPaletteAutoOpen = true;
+    if (item.type === "tab" && !openInNewTab && !paletteNewTabMode) {
       chrome.tabs.update(item.tabId, { active: true });
     } else {
       const url = item.url;
-      if (openInNewTab || state.activeId == null) {
+      if (openInNewTab || paletteNewTabMode || state.activeId == null) {
         chrome.tabs.create({ windowId: state.windowId, url, active: true });
       } else {
         chrome.tabs.update(state.activeId, { url });
@@ -584,6 +597,7 @@
 
   function getTypeName(type) {
     switch (type) {
+      case "navigate": return "URL";
       case "tab": return "Open Tabs";
       case "bookmark": return "Bookmarks";
       case "history": return "Recent History";
@@ -594,6 +608,7 @@
 
   function getTagText(type) {
     switch (type) {
+      case "navigate": return "Go";
       case "tab": return "Tab";
       case "bookmark": return "Bookmark";
       case "history": return "History";
@@ -607,6 +622,8 @@
       return `<img src="${iconUrl}" onerror="this.outerHTML='<svg class=\\'svg-fallback\\' viewBox=\\'0 0 24 24\\' width=\\'14\\' height=\\'14\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\'/><path d=\\'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\\'/><path d=\\'M2 12h20\\'/></svg>'"/>`;
     }
     switch (type) {
+      case "navigate":
+        return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
       case "tab":
         return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`;
       case "bookmark":
@@ -902,11 +919,11 @@
     });
     $("toggle").addEventListener("click", toggleSidebar);
     $("reveal").addEventListener("click", showSidebar);
-    $("newtab").addEventListener("click", () => openPalette());
-    $("empty-new").addEventListener("click", () => openPalette());
+    $("newtab").addEventListener("click", () => openPalette("", true));
+    $("empty-new").addEventListener("click", () => openPalette("", true));
     
     // Zen trigger
-    $("zen-search-wrapper").addEventListener("click", () => openPalette());
+    $("zen-search-wrapper").addEventListener("click", () => openPalette("", false));
     $("add-dial-btn").addEventListener("click", openDialDialog);
     $("dial-cancel").addEventListener("click", closeDialDialog);
     $("dial-save").addEventListener("click", saveDialDialog);
@@ -988,7 +1005,7 @@
       switch (e.key) {
         case "t":
           e.preventDefault();
-          openPalette();
+          openPalette("", true);
           break;
         case "w":
           e.preventDefault();
@@ -1037,7 +1054,7 @@
     if (mod) {
       switch (key) {
         case "t":
-          openPalette();
+          openPalette("", true);
           break;
         case "w":
           if (state.activeId != null) chrome.tabs.remove(state.activeId);
