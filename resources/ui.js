@@ -843,61 +843,136 @@
       console.warn("[eyebrow] vivaldi.extensionActionUtils missing");
       return;
     }
+
+    // Toggle: if the same anchor is already open, close it
+    if (state.popups.length > 0 && state.popups[0].anchor === anchor) {
+      closeAllPopups();
+      return;
+    }
+
     vivaldi.extensionActionUtils.executeExtensionAction(
       ext.id,
       state.windowId,
       (data) => {
         if (!data || !data.popupUrl) return;
-        showExtensionPopup(data.popupUrl, anchor);
+        const preferredW = data.width || null;
+        const preferredH = data.height || null;
+        showExtensionPopup(data.popupUrl, anchor, preferredW, preferredH);
       },
     );
   }
 
-  function showExtensionPopup(url, anchor) {
+  function positionPopup(popup, anchor, w, h) {
+    const rect = anchor.getBoundingClientRect();
+    const margin = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Try to place above the anchor, left-aligned with button
+    let left = rect.left + rect.width / 2 - w / 2;
+    let top = rect.top - h - margin;
+
+    // If it would go above the screen, place below instead
+    if (top < margin) top = rect.bottom + margin;
+
+    // Clamp horizontally
+    if (left + w > vw - margin) left = vw - w - margin;
+    if (left < margin) left = margin;
+
+    // Clamp vertically
+    if (top + h > vh - margin) top = vh - h - margin;
+    if (top < margin) top = margin;
+
+    popup.style.left = left + "px";
+    popup.style.top = top + "px";
+  }
+
+  function showExtensionPopup(url, anchor, preferredW, preferredH) {
     closeAllPopups();
+
+    const MAX_W = 800;
+    const MAX_H = 600;
 
     const popup = document.createElement("div");
     popup.className = "ext-popup";
-
-    const w = 380;
-    const h = 540;
-    popup.style.width = w + "px";
-    popup.style.height = h + "px";
-
-    const rect = anchor.getBoundingClientRect();
-    let left = rect.left;
-    let bottom = window.innerHeight - rect.top + 8;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
-    if (left < 8) left = 8;
-    if (window.innerHeight - bottom - h < 8) {
-      bottom = window.innerHeight - h - 8;
-    }
-    popup.style.left = left + "px";
-    popup.style.bottom = bottom + "px";
+    popup.style.width = "1px";
+    popup.style.height = "1px";
+    popup.style.visibility = "hidden";
 
     const wv = document.createElement("webview");
+    wv.className = "ext-popup-view";
     wv.setAttribute("vivaldi_view_type", "extension_popup");
     wv.setAttribute("windowId", String(state.windowId));
     wv.src = url;
     popup.appendChild(wv);
 
-    appEl.appendChild(popup);
-    state.popups.push({ el: popup, anchor });
+    wv.addEventListener("loadstop", () => {
+      setTimeout(() => {
+        try {
+          wv.executeScript({
+            code: `(function(){
+              var rect = document.body.getBoundingClientRect();
+              var w = rect.width;
+              var h = rect.height;
+              if (w <= 1) w = document.documentElement.scrollWidth;
+              if (h <= 1) h = document.documentElement.scrollHeight;
+              return [Math.ceil(w), Math.ceil(h)];
+            })()`
+          }, (results) => {
+            if (!chrome.runtime.lastError && results && results[0]) {
+              const [cw, ch] = results[0];
+              if (cw > 10 && ch > 10) {
+                const fw = Math.min(cw, MAX_W);
+                const fh = Math.min(ch, MAX_H);
+                popup.style.width = fw + "px";
+                popup.style.height = fh + "px";
+                positionPopup(popup, anchor, fw, fh);
+              }
+            }
+            popup.style.visibility = "";
+            requestAnimationFrame(() => popup.classList.add("open"));
+          });
+        } catch (_) {
+          popup.style.visibility = "";
+          requestAnimationFrame(() => popup.classList.add("open"));
+        }
+      }, 150);
+    }, { once: true });
 
-    setTimeout(() => {
-      const dismiss = (e) => {
-        if (popup.contains(e.target) || anchor.contains(e.target)) return;
-        popup.remove();
-        state.popups = state.popups.filter((p) => p.el !== popup);
-        document.removeEventListener("mousedown", dismiss, true);
-      };
-      document.addEventListener("mousedown", dismiss, true);
-    }, 0);
+    positionPopup(popup, anchor, 1, 1);
+    appEl.appendChild(popup);
+
+    const entry = { el: popup, anchor };
+    state.popups.push(entry);
+
+    const dismiss = (e) => {
+      if (popup.contains(e.target) || anchor.contains(e.target)) return;
+      dismissPopup(popup);
+      document.removeEventListener("mousedown", dismiss, true);
+    };
+    setTimeout(() => document.addEventListener("mousedown", dismiss, true), 0);
+  }
+
+  function dismissPopup(popup) {
+    popup.classList.remove("open");
+    popup.classList.add("closing");
+    popup.addEventListener("animationend", () => {
+      popup.remove();
+    }, { once: true });
+    // Fallback in case animationend doesn't fire
+    setTimeout(() => popup.remove(), 220);
+    state.popups = state.popups.filter((p) => p.el !== popup);
   }
 
   function closeAllPopups() {
-    for (const p of state.popups) p.el.remove();
+    const toClose = state.popups.slice();
     state.popups = [];
+    for (const p of toClose) {
+      p.el.classList.remove("open");
+      p.el.classList.add("closing");
+      p.el.addEventListener("animationend", () => p.el.remove(), { once: true });
+      setTimeout(() => p.el.remove(), 220);
+    }
   }
 
   /* ─── bindings ──────────────────────────────────── */
