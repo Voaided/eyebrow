@@ -63,6 +63,34 @@
     if (v) fn(v);
   }
 
+  function navigateTo(url) {
+    if (state.activeId == null) {
+      chrome.tabs.create({ windowId: state.windowId, url, active: true });
+    } else {
+      chrome.tabs.update(state.activeId, { url });
+    }
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  /* ─── Toast ─────────────────────────────────────── */
+
+  function showToast(message) {
+    const toast = $("eyebrow-toast");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.remove("show");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        toast.classList.add("show");
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => toast.classList.remove("show"), 2000);
+      });
+    });
+  }
+
   /* ─── webviews ──────────────────────────────────── */
 
   const KEYBOARD_INJECT_CODE = `(function(){
@@ -72,7 +100,7 @@
       var isMod=e.ctrlKey||e.metaKey;
       var key=e.key;
       var isShortcut=
-        (isMod&&["t","w","l","r","b","Tab"].indexOf(key)!==-1)||
+        (isMod&&["t","w","l","r","b","d","Tab"].indexOf(key)!==-1)||
         key==="Escape"||
         (e.altKey&&["ArrowLeft","ArrowRight"].indexOf(key)!==-1)||
         key==="F5";
@@ -100,9 +128,7 @@
   function injectKeyboardListener(view) {
     try {
       view.executeScript({ code: KEYBOARD_INJECT_CODE }, () => {
-        if (chrome.runtime.lastError) {
-          // silently ignore — some pages (chrome://, about:) block injection
-        }
+        if (chrome.runtime.lastError) {}
       });
     } catch (_) {}
   }
@@ -116,7 +142,6 @@
     view.setAttribute("role", "document");
     view.setAttribute("tab_id", String(tabId));
 
-    // Intercept console messages from the injected keyboard script
     view.addEventListener("consolemessage", (e) => {
       if (e.message && e.message.startsWith("eyebrow-keydown:")) {
         try {
@@ -134,11 +159,14 @@
       }
     });
 
-    // Inject keyboard listener script after each page load inside the webview
     view.addEventListener("loadstop", () => {
       injectKeyboardListener(view);
+      // Capture screenshot for preview when this is the active tab
+      const tabId = Number(view.getAttribute("tab_id"));
+      if (tabId === state.activeId) {
+        setTimeout(() => captureTabScreenshot(tabId), 400);
+      }
     });
-    // Also try on contentload (fires earlier on some pages)
     view.addEventListener("contentload", () => {
       injectKeyboardListener(view);
     });
@@ -146,6 +174,89 @@
     viewportEl.appendChild(view);
     return view;
   }
+
+  /* ─── Tab Screenshots ────────────────────────────── */
+
+  const tabScreenshots = new Map();
+
+  async function captureTabScreenshot(tabId) {
+    if (tabId !== state.activeId) return;
+    try {
+      const dataUrl = await chrome.tabs.captureVisibleTab(state.windowId, { format: "jpeg", quality: 40 });
+      tabScreenshots.set(tabId, dataUrl);
+    } catch (_) {}
+  }
+
+  /* ─── Tab Preview ────────────────────────────────── */
+
+  let previewTimeout = null;
+  let previewVisible = false;
+
+  function showTabPreview(tab, anchorEl) {
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => {
+      const preview = $("tab-preview");
+      if (!preview) return;
+
+      const previewFav = preview.querySelector(".preview-favicon");
+      const previewTitle = preview.querySelector(".preview-title");
+      const previewUrl = preview.querySelector(".preview-url");
+      const previewImg = preview.querySelector(".preview-screenshot");
+
+      previewTitle.textContent = tab.title || "Untitled";
+      previewUrl.textContent = tab.url || "";
+
+      if (tab.favIconUrl) {
+        previewFav.src = tab.favIconUrl;
+        previewFav.style.display = "block";
+      } else {
+        previewFav.style.display = "none";
+      }
+
+      const screenshot = tabScreenshots.get(tab.id);
+      if (screenshot) {
+        previewImg.style.backgroundImage = `url(${screenshot})`;
+        previewImg.classList.add("has-image");
+      } else {
+        previewImg.classList.remove("has-image");
+      }
+
+      const sidebarEl = document.getElementById("sidebar");
+      const sidebarRect = sidebarEl.getBoundingClientRect();
+      const anchorRect = anchorEl.getBoundingClientRect();
+
+      preview.style.display = "block";
+
+      const previewH = screenshot ? 190 : 56;
+      let top = anchorRect.top;
+      const maxTop = window.innerHeight - previewH - 8;
+      if (top > maxTop) top = maxTop;
+      if (top < 8) top = 8;
+
+      preview.style.top = top + "px";
+      preview.style.left = (sidebarRect.right + 10) + "px";
+
+      requestAnimationFrame(() => {
+        preview.classList.add("open");
+        previewVisible = true;
+      });
+    }, 280);
+  }
+
+  function hideTabPreview() {
+    clearTimeout(previewTimeout);
+    const preview = $("tab-preview");
+    if (!preview) return;
+    preview.classList.remove("open");
+    previewVisible = false;
+    setTimeout(() => {
+      if (!previewVisible) preview.style.display = "none";
+    }, 200);
+  }
+
+  /* ─── Tab Drag & Drop ────────────────────────────── */
+
+  let dragTabId = null;
 
   /* ─── tab list ──────────────────────────────────── */
 
@@ -158,6 +269,7 @@
       if (tab.status === "loading") cls += " loading";
       el.className = cls;
       el.title = tab.title || tab.url || "";
+      el.draggable = true;
 
       // Favicon Container
       const favWrapper = document.createElement("div");
@@ -186,7 +298,7 @@
 
       const close = document.createElement("span");
       close.className = "close";
-      close.textContent = "\u00d7";
+      close.textContent = "×";
       close.title = "Close tab";
       close.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -199,6 +311,57 @@
       });
       el.addEventListener("auxclick", (e) => {
         if (e.button === 1) chrome.tabs.remove(tab.id);
+      });
+
+      // ── Preview on hover ──
+      el.addEventListener("mouseenter", () => {
+        if (tab.id !== state.activeId) {
+          showTabPreview(tab, el);
+        }
+      });
+      el.addEventListener("mouseleave", () => {
+        hideTabPreview();
+      });
+
+      // ── Drag & Drop ──
+      el.addEventListener("dragstart", (e) => {
+        dragTabId = tab.id;
+        el.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        hideTabPreview();
+      });
+
+      el.addEventListener("dragend", () => {
+        el.classList.remove("dragging");
+        document.querySelectorAll(".tab.drag-over").forEach(t => t.classList.remove("drag-over"));
+        dragTabId = null;
+      });
+
+      el.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (dragTabId != null && tab.id !== dragTabId) {
+          document.querySelectorAll(".tab.drag-over").forEach(t => t.classList.remove("drag-over"));
+          el.classList.add("drag-over");
+        }
+      });
+
+      el.addEventListener("dragleave", (e) => {
+        if (!el.contains(e.relatedTarget)) {
+          el.classList.remove("drag-over");
+        }
+      });
+
+      el.addEventListener("drop", (e) => {
+        e.preventDefault();
+        el.classList.remove("drag-over");
+        if (dragTabId == null || dragTabId === tab.id) return;
+        const toIdx = state.tabs.findIndex(t => t.id === tab.id);
+        if (toIdx !== -1) {
+          chrome.tabs.move(dragTabId, { index: toIdx }, () => {
+            if (chrome.runtime.lastError) {}
+          });
+        }
       });
 
       tabsEl.appendChild(el);
@@ -234,8 +397,7 @@
     }
 
     emptyEl.classList.toggle("show", state.tabs.length === 0);
-    
-    // Zen New Tab Page toggle
+
     const zenPage = $("zen-page");
     if (zenPage) {
       const showZen = state.tabs.length > 0 && isNewTab;
@@ -265,13 +427,19 @@
     const tabs = await chrome.tabs.query({ windowId: state.windowId });
     state.tabs = tabs;
     const active = tabs.find((t) => t.active);
+    const prevActiveId = state.activeId;
     state.activeId = active ? active.id : null;
+
+    // Capture screenshot of the tab we're leaving
+    if (prevActiveId && prevActiveId !== state.activeId) {
+      captureTabScreenshot(prevActiveId).catch(() => {});
+    }
 
     renderTabs();
     syncViews();
     syncOmnibox();
+    updateBookmarkButton();
 
-    // Auto-open palette when focusing on a new blank tab
     if (state.activeId !== lastActiveId) {
       lastActiveId = state.activeId;
       if (active && !suppressPaletteAutoOpen && isBlankTab(active)) {
@@ -291,11 +459,262 @@
     appEl.classList.remove("collapsed");
   }
 
-  /* ─── command palette (zen-style "new tab") ─────── */
+  /* ─── History Panel ──────────────────────────────── */
+
+  function openHistoryPanel() {
+    closeBookmarksPanel();
+    $("history-panel").classList.add("open");
+    loadHistoryItems($("history-search").value || "");
+  }
+
+  function closeHistoryPanel() {
+    $("history-panel").classList.remove("open");
+  }
+
+  function loadHistoryItems(query) {
+    if (!chrome.history) {
+      renderHistoryItems([]);
+      return;
+    }
+    chrome.history.search(
+      { text: query, maxResults: 120, startTime: Date.now() - 30 * 24 * 60 * 60 * 1000 },
+      (results) => renderHistoryItems(results || [])
+    );
+  }
+
+  function renderHistoryItems(items) {
+    const container = $("history-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (items.length === 0) {
+      const el = document.createElement("div");
+      el.className = "panel-empty";
+      el.textContent = "No history to show";
+      container.appendChild(el);
+      return;
+    }
+
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    const yesterdayMidnight = new Date(todayMidnight);
+    yesterdayMidnight.setDate(yesterdayMidnight.getDate() - 1);
+
+    const groups = new Map();
+    for (const item of items) {
+      const d = new Date(item.lastVisitTime);
+      d.setHours(0, 0, 0, 0);
+      let key;
+      if (d.getTime() === todayMidnight.getTime()) key = "Today";
+      else if (d.getTime() === yesterdayMidnight.getTime()) key = "Yesterday";
+      else key = d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+
+    for (const [day, dayItems] of groups) {
+      const header = document.createElement("div");
+      header.className = "panel-group-header";
+      header.textContent = day;
+      container.appendChild(header);
+
+      for (const item of dayItems) {
+        const time = new Date(item.lastVisitTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+        const el = createPanelItem({ title: item.title || item.url, url: item.url, time });
+
+        const del = document.createElement("button");
+        del.className = "panel-item-del";
+        del.innerHTML = "&times;";
+        del.title = "Remove from history";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (chrome.history) {
+            chrome.history.deleteUrl({ url: item.url }, () => {
+              loadHistoryItems($("history-search").value || "");
+            });
+          }
+        });
+        el.appendChild(del);
+
+        el.addEventListener("click", () => {
+          navigateTo(item.url);
+          closeHistoryPanel();
+        });
+        container.appendChild(el);
+      }
+    }
+  }
+
+  /* ─── Bookmarks Panel ────────────────────────────── */
+
+  function openBookmarksPanel() {
+    closeHistoryPanel();
+    $("bookmarks-panel").classList.add("open");
+    loadBookmarkItems($("bookmarks-search").value || "");
+  }
+
+  function closeBookmarksPanel() {
+    $("bookmarks-panel").classList.remove("open");
+  }
+
+  function loadBookmarkItems(query) {
+    if (!chrome.bookmarks) {
+      renderBookmarkItems([]);
+      return;
+    }
+    if (query) {
+      chrome.bookmarks.search(query, (results) => {
+        renderBookmarkItems((results || []).filter(b => b.url));
+      });
+    } else {
+      chrome.bookmarks.getTree((tree) => {
+        const flat = [];
+        function traverse(nodes) {
+          for (const node of (nodes || [])) {
+            if (node.url) flat.push(node);
+            if (node.children) traverse(node.children);
+          }
+        }
+        traverse(tree);
+        renderBookmarkItems(flat);
+      });
+    }
+  }
+
+  function renderBookmarkItems(items) {
+    const container = $("bookmarks-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (items.length === 0) {
+      const el = document.createElement("div");
+      el.className = "panel-empty";
+      el.textContent = "No bookmarks found";
+      container.appendChild(el);
+      return;
+    }
+
+    for (const item of items) {
+      const el = createPanelItem({ title: item.title || item.url, url: item.url });
+
+      const del = document.createElement("button");
+      del.className = "panel-item-del";
+      del.innerHTML = "&times;";
+      del.title = "Remove bookmark";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.bookmarks.remove(item.id, () => {
+          loadBookmarkItems($("bookmarks-search").value || "");
+          updateBookmarkButton();
+        });
+      });
+      el.appendChild(del);
+
+      el.addEventListener("click", () => {
+        navigateTo(item.url);
+        closeBookmarksPanel();
+      });
+      container.appendChild(el);
+    }
+  }
+
+  /* ─── Panel Item Factory ─────────────────────────── */
+
+  function createPanelItem({ title, url, time }) {
+    const el = document.createElement("div");
+    el.className = "panel-item";
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "panel-item-icon";
+    const img = document.createElement("img");
+    img.src = `chrome://favicon/size/16@1x/${url}`;
+    img.alt = "";
+    img.onerror = () => {
+      img.remove();
+      const dot = document.createElement("div");
+      dot.className = "panel-item-dot";
+      iconWrap.appendChild(dot);
+    };
+    iconWrap.appendChild(img);
+
+    const textWrap = document.createElement("div");
+    textWrap.className = "panel-item-text";
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "panel-item-title";
+    titleEl.textContent = title;
+
+    const urlEl = document.createElement("span");
+    urlEl.className = "panel-item-url";
+    urlEl.textContent = url;
+
+    textWrap.appendChild(titleEl);
+    textWrap.appendChild(urlEl);
+
+    el.appendChild(iconWrap);
+    el.appendChild(textWrap);
+
+    if (time) {
+      const timeEl = document.createElement("span");
+      timeEl.className = "panel-item-time";
+      timeEl.textContent = time;
+      el.appendChild(timeEl);
+    }
+
+    return el;
+  }
+
+  /* ─── Bookmark Current Page ──────────────────────── */
+
+  async function checkIfBookmarked(url) {
+    if (!url || !chrome.bookmarks) return false;
+    return new Promise((resolve) => {
+      chrome.bookmarks.search({ url }, (results) => {
+        resolve(!!(results && results.length > 0));
+      });
+    });
+  }
+
+  async function updateBookmarkButton() {
+    const btn = $("bookmark-btn");
+    if (!btn) return;
+    const active = state.tabs.find(t => t.id === state.activeId);
+    if (!active || isBlankTab(active)) {
+      btn.style.display = "none";
+      return;
+    }
+    btn.style.display = "flex";
+    const bookmarked = await checkIfBookmarked(active.url);
+    btn.classList.toggle("bookmarked", bookmarked);
+    btn.title = bookmarked ? "Remove bookmark (Ctrl+D)" : "Bookmark this page (Ctrl+D)";
+  }
+
+  async function toggleBookmark() {
+    const active = state.tabs.find(t => t.id === state.activeId);
+    if (!active || isBlankTab(active) || !chrome.bookmarks) return;
+
+    const url = active.url;
+    const title = active.title || url;
+
+    const results = await new Promise(resolve => chrome.bookmarks.search({ url }, resolve));
+
+    if (results && results.length > 0) {
+      for (const bm of results) {
+        chrome.bookmarks.remove(bm.id, () => {});
+      }
+      showToast("Bookmark removed");
+    } else {
+      chrome.bookmarks.create({ title, url }, () => {});
+      showToast("Bookmarked!");
+    }
+
+    setTimeout(updateBookmarkButton, 80);
+  }
+
+  /* ─── command palette ───────────────────────────── */
 
   function openPalette(prefill, newTabMode = false) {
     paletteNewTabMode = newTabMode;
-    // blur webviews
     for (const wv of document.querySelectorAll("webview")) {
       try { wv.blur(); } catch (_) {}
     }
@@ -305,14 +724,11 @@
 
     paletteInput.value = prefill || "";
     if (!palette.open) palette.showModal();
-    updatePaletteResults(); // Initial render
+    updatePaletteResults();
 
-    // focus palette
     clearInterval(paletteFocusTimer);
     const grab = () => {
-      try {
-        paletteInput.focus({ preventScroll: true });
-      } catch (_) {}
+      try { paletteInput.focus({ preventScroll: true }); } catch (_) {}
     };
     grab();
     requestAnimationFrame(grab);
@@ -337,11 +753,7 @@
     suppressPaletteAutoOpen = true;
 
     if (openInNewTab || paletteNewTabMode || state.activeId == null) {
-      chrome.tabs.create({
-        windowId: state.windowId,
-        url,
-        active: true,
-      });
+      chrome.tabs.create({ windowId: state.windowId, url, active: true });
     } else {
       chrome.tabs.update(state.activeId, { url });
     }
@@ -373,12 +785,8 @@
     try {
       const res = await fetch(`https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`);
       const data = await res.json();
-      if (data && Array.isArray(data[1])) {
-        return data[1].slice(0, 5);
-      }
-    } catch (e) {
-      console.warn("[eyebrow] suggestion error:", e);
-    }
+      if (data && Array.isArray(data[1])) return data[1].slice(0, 5);
+    } catch (_) {}
     return [];
   }
 
@@ -394,7 +802,6 @@
     const results = [];
     const queryLower = query.toLowerCase();
 
-    // URL navigate result at the top
     if (looksLikeUrl(query)) {
       results.push({
         type: "navigate",
@@ -404,50 +811,33 @@
       });
     }
 
-    // 1. Matches in open tabs
-    const openTabs = state.tabs.filter(t => 
+    const openTabs = state.tabs.filter(t =>
       (t.title && t.title.toLowerCase().includes(queryLower)) ||
       (t.url && t.url.toLowerCase().includes(queryLower))
     );
     for (const tab of openTabs.slice(0, 4)) {
       results.push({
-        type: "tab",
-        title: tab.title || tab.url,
-        subtitle: "Switch to Tab",
-        url: tab.url,
-        tabId: tab.id,
-        icon: tab.favIconUrl || ""
+        type: "tab", title: tab.title || tab.url,
+        subtitle: "Switch to Tab", url: tab.url,
+        tabId: tab.id, icon: tab.favIconUrl || ""
       });
     }
 
-    // 2. Local Bookmarks & History
     const [history, bookmarks] = await Promise.all([
       searchHistory(query),
       searchBookmarks(query)
     ]);
 
     for (const bm of bookmarks.slice(0, 4)) {
-      results.push({
-        type: "bookmark",
-        title: bm.title,
-        subtitle: bm.url,
-        url: bm.url
-      });
+      results.push({ type: "bookmark", title: bm.title, subtitle: bm.url, url: bm.url });
     }
 
     for (const hist of history.slice(0, 4)) {
-      results.push({
-        type: "history",
-        title: hist.title || hist.url,
-        subtitle: hist.url,
-        url: hist.url
-      });
+      results.push({ type: "history", title: hist.title || hist.url, subtitle: hist.url, url: hist.url });
     }
 
-    // 3. Fallback direct google search item
     results.push({
-      type: "search",
-      title: query,
+      type: "search", title: query,
       subtitle: `Search Google for "${query}"`,
       url: `https://www.google.com/search?q=${encodeURIComponent(query)}`
     });
@@ -464,13 +854,11 @@
       return;
     }
 
-    // Local results phase
     const localResults = await searchAll(query);
     if (lastQuery !== query) return;
 
     renderPaletteResults(localResults);
 
-    // Dynamic Google suggestions merge phase
     try {
       const suggestions = await fetchSuggestions(query);
       if (lastQuery !== query) return;
@@ -481,8 +869,7 @@
       for (const sug of suggestions) {
         if (!currentTitles.has(sug.toLowerCase()) && sug.toLowerCase() !== query.toLowerCase()) {
           sugResults.push({
-            type: "search",
-            title: sug,
+            type: "search", title: sug,
             subtitle: "Google Search Suggestion",
             url: `https://www.google.com/search?q=${encodeURIComponent(sug)}`
           });
@@ -490,17 +877,12 @@
       }
 
       if (sugResults.length > 0) {
-        const searchFallbackIndex = localResults.findIndex(r => r.type === "search" && r.title === query);
-        if (searchFallbackIndex !== -1) {
-          localResults.splice(searchFallbackIndex, 0, ...sugResults);
-        } else {
-          localResults.push(...sugResults);
-        }
+        const idx = localResults.findIndex(r => r.type === "search" && r.title === query);
+        if (idx !== -1) localResults.splice(idx, 0, ...sugResults);
+        else localResults.push(...sugResults);
         renderPaletteResults(localResults);
       }
-    } catch (err) {
-      console.warn("[eyebrow] suggestion merge failed:", err);
-    }
+    } catch (_) {}
   }
 
   function renderPaletteResults(results) {
@@ -514,12 +896,11 @@
     }
 
     paletteResults.classList.add("has-results");
-    paletteSelectedIndex = 0; // Default first selection
+    paletteSelectedIndex = 0;
 
     let currentType = null;
 
     results.forEach((item, idx) => {
-      // Create type headers
       if (item.type !== currentType) {
         currentType = item.type;
         const header = document.createElement("div");
@@ -533,29 +914,25 @@
       if (idx === paletteSelectedIndex) el.classList.add("selected");
       el.dataset.index = idx;
 
-      // Icon
       const iconWrap = document.createElement("div");
       iconWrap.className = "item-icon";
       iconWrap.innerHTML = getIconSvg(item.type, item.icon);
       el.appendChild(iconWrap);
 
-      // Text Stack
       const textStack = document.createElement("div");
       textStack.className = "item-text-stack";
 
       const title = document.createElement("span");
       title.className = "item-title";
-      
-      // Highlight matching query text
+
       const query = paletteInput.value.trim().toLowerCase();
       const textStr = item.title;
       const qIdx = textStr.toLowerCase().indexOf(query);
       if (qIdx !== -1 && query.length > 0) {
-        const part1 = textStr.substring(0, qIdx);
-        const part2 = textStr.substring(qIdx, qIdx + query.length);
-        const part3 = textStr.substring(qIdx + query.length);
-        
-        title.innerHTML = `${escapeHtml(part1)}<mark class="highlight">${escapeHtml(part2)}</mark>${escapeHtml(part3)}`;
+        const p1 = textStr.substring(0, qIdx);
+        const p2 = textStr.substring(qIdx, qIdx + query.length);
+        const p3 = textStr.substring(qIdx + query.length);
+        title.innerHTML = `${escapeHtml(p1)}<mark class="highlight">${escapeHtml(p2)}</mark>${escapeHtml(p3)}`;
       } else {
         title.textContent = textStr;
       }
@@ -569,7 +946,6 @@
       }
       el.appendChild(textStack);
 
-      // Tag
       const tag = document.createElement("span");
       tag.className = "item-tag";
       tag.textContent = getTagText(item.type);
@@ -587,9 +963,7 @@
   function selectItem(idx) {
     if (idx < 0 || idx >= paletteResultsList.length) return;
     const items = document.querySelectorAll(".palette-result-item");
-    if (items[paletteSelectedIndex]) {
-      items[paletteSelectedIndex].classList.remove("selected");
-    }
+    if (items[paletteSelectedIndex]) items[paletteSelectedIndex].classList.remove("selected");
     paletteSelectedIndex = idx;
     if (items[paletteSelectedIndex]) {
       items[paletteSelectedIndex].classList.add("selected");
@@ -656,12 +1030,8 @@
       case "search":
         return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`;
       default:
-        return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>`;
+        return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`;
     }
-  }
-
-  function escapeHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
   /* ─── Zen Dashboard Controller ────────────────── */
@@ -674,19 +1044,14 @@
 
     const now = new Date();
 
-    // Time
     let hours = now.getHours();
     const minutes = String(now.getMinutes()).padStart(2, "0");
     const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12;
-    hours = hours ? hours : 12;
+    hours = hours % 12 || 12;
     clockEl.textContent = `${hours}:${minutes} ${ampm}`;
 
-    // Date
-    const dateOpts = { weekday: "long", month: "long", day: "numeric" };
-    dateEl.textContent = now.toLocaleDateString("en-US", dateOpts);
+    dateEl.textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-    // Greeting (hardcoded to Gaurish per approved plan)
     const hr = now.getHours();
     let greet = "Good evening";
     if (hr < 12) greet = "Good morning";
@@ -711,7 +1076,6 @@
       const card = document.createElement("div");
       card.className = "dial-card";
 
-      // Vivaldi favicon resolver API
       const faviconUrl = `chrome://favicon/size/32@1x/${dial.url}`;
 
       const inner = document.createElement("div");
@@ -786,10 +1150,7 @@
     const name = $("dial-name").value.trim();
     let url = $("dial-url").value.trim();
     if (!name || !url) return;
-
-    if (!/^https?:\/\//i.test(url)) {
-      url = "https://" + url;
-    }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
 
     let dials = [];
     try {
@@ -867,7 +1228,6 @@
       return;
     }
 
-    // Toggle: if the same anchor is already open, close it
     if (state.popups.length > 0 && state.popups[0].anchor === anchor) {
       closeAllPopups();
       return;
@@ -878,9 +1238,7 @@
       state.windowId,
       (data) => {
         if (!data || !data.popupUrl) return;
-        const preferredW = data.width || null;
-        const preferredH = data.height || null;
-        showExtensionPopup(data.popupUrl, anchor, preferredW, preferredH);
+        showExtensionPopup(data.popupUrl, anchor, data.width || null, data.height || null);
       },
     );
   }
@@ -891,18 +1249,12 @@
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Try to place above the anchor, left-aligned with button
     let left = rect.left + rect.width / 2 - w / 2;
     let top = rect.top - h - margin;
 
-    // If it would go above the screen, place below instead
     if (top < margin) top = rect.bottom + margin;
-
-    // Clamp horizontally
     if (left + w > vw - margin) left = vw - w - margin;
     if (left < margin) left = margin;
-
-    // Clamp vertically
     if (top + h > vh - margin) top = vh - h - margin;
     if (top < margin) top = margin;
 
@@ -979,10 +1331,7 @@
   function dismissPopup(popup) {
     popup.classList.remove("open");
     popup.classList.add("closing");
-    popup.addEventListener("animationend", () => {
-      popup.remove();
-    }, { once: true });
-    // Fallback in case animationend doesn't fire
+    popup.addEventListener("animationend", () => popup.remove(), { once: true });
     setTimeout(() => popup.remove(), 220);
     state.popups = state.popups.filter((p) => p.el !== popup);
   }
@@ -1029,9 +1378,7 @@
   function closeCtxMenu() {
     ctxMenu.classList.remove("open");
     setTimeout(() => {
-      if (!ctxMenu.classList.contains("open")) {
-        ctxMenu.style.display = "none";
-      }
+      if (!ctxMenu.classList.contains("open")) ctxMenu.style.display = "none";
     }, 200);
   }
 
@@ -1052,11 +1399,15 @@
       case "reload":
         if (state.activeId != null) chrome.tabs.reload(state.activeId);
         break;
+      case "bookmark-page":
+        toggleBookmark();
+        break;
       case "copy-url":
         if (state.activeId != null) {
           const active = state.tabs.find((t) => t.id === state.activeId);
           if (active && active.url) {
             navigator.clipboard.writeText(active.url).catch(() => {});
+            showToast("URL copied");
           }
         }
         break;
@@ -1096,19 +1447,60 @@
     $("reveal").addEventListener("click", showSidebar);
     $("newtab").addEventListener("click", () => openPalette("", true));
     $("empty-new").addEventListener("click", () => openPalette("", true));
-    
+
+    // History & Bookmarks toggles
+    $("toggle-history").addEventListener("click", () => {
+      if ($("history-panel").classList.contains("open")) {
+        closeHistoryPanel();
+      } else {
+        openHistoryPanel();
+      }
+    });
+
+    $("toggle-bookmarks").addEventListener("click", () => {
+      if ($("bookmarks-panel").classList.contains("open")) {
+        closeBookmarksPanel();
+      } else {
+        openBookmarksPanel();
+      }
+    });
+
+    $("history-back").addEventListener("click", closeHistoryPanel);
+    $("bookmarks-back").addEventListener("click", closeBookmarksPanel);
+
+    $("history-search").addEventListener("input", () => {
+      loadHistoryItems($("history-search").value);
+    });
+
+    $("bookmarks-search").addEventListener("input", () => {
+      loadBookmarkItems($("bookmarks-search").value);
+    });
+
+    $("clear-history").addEventListener("click", () => {
+      if (!chrome.history) return;
+      chrome.history.deleteAll(() => {
+        loadHistoryItems("");
+        showToast("History cleared");
+      });
+    });
+
+    $("bookmark-current").addEventListener("click", () => {
+      toggleBookmark();
+    });
+
+    $("bookmark-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleBookmark();
+    });
+
     // Zen trigger
     $("zen-search-wrapper").addEventListener("click", () => openPalette("", false));
     $("add-dial-btn").addEventListener("click", openDialDialog);
     $("dial-cancel").addEventListener("click", closeDialDialog);
     $("dial-save").addEventListener("click", saveDialDialog);
-    
+
     $("manage-ext").addEventListener("click", () => {
-      chrome.tabs.create({
-        windowId: state.windowId,
-        url: "chrome://extensions",
-        active: true,
-      });
+      chrome.tabs.create({ windowId: state.windowId, url: "chrome://extensions", active: true });
     });
 
     urlInput.addEventListener("keydown", (e) => {
@@ -1171,6 +1563,12 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           closeAllPopups();
+        } else if ($("history-panel").classList.contains("open")) {
+          e.preventDefault();
+          closeHistoryPanel();
+        } else if ($("bookmarks-panel").classList.contains("open")) {
+          e.preventDefault();
+          closeBookmarksPanel();
         }
       },
       true,
@@ -1198,16 +1596,22 @@
         case "r":
           e.preventDefault();
           if (state.activeId != null) {
-            if (e.shiftKey) {
-              chrome.tabs.reload(state.activeId, { bypassCache: true });
-            } else {
-              chrome.tabs.reload(state.activeId);
-            }
+            if (e.shiftKey) chrome.tabs.reload(state.activeId, { bypassCache: true });
+            else chrome.tabs.reload(state.activeId);
           }
           break;
         case "b":
           e.preventDefault();
           toggleSidebar();
+          break;
+        case "d":
+          e.preventDefault();
+          toggleBookmark();
+          break;
+        case "h":
+          e.preventDefault();
+          if ($("history-panel").classList.contains("open")) closeHistoryPanel();
+          else openHistoryPanel();
           break;
         case "Tab":
           if (state.tabs.length < 2) break;
@@ -1215,8 +1619,7 @@
           {
             const idx = state.tabs.findIndex((t) => t.id === state.activeId);
             const dir = e.shiftKey ? -1 : 1;
-            const next =
-              state.tabs[(idx + dir + state.tabs.length) % state.tabs.length];
+            const next = state.tabs[(idx + dir + state.tabs.length) % state.tabs.length];
             if (next) chrome.tabs.update(next.id, { active: true });
           }
           break;
@@ -1263,23 +1666,26 @@
           break;
         case "r":
           if (state.activeId != null) {
-            if (e.shiftKey) {
-              chrome.tabs.reload(state.activeId, { bypassCache: true });
-            } else {
-              chrome.tabs.reload(state.activeId);
-            }
+            if (e.shiftKey) chrome.tabs.reload(state.activeId, { bypassCache: true });
+            else chrome.tabs.reload(state.activeId);
           }
           break;
         case "b":
           toggleSidebar();
+          break;
+        case "d":
+          toggleBookmark();
+          break;
+        case "h":
+          if ($("history-panel").classList.contains("open")) closeHistoryPanel();
+          else openHistoryPanel();
           break;
         case "Tab":
           if (state.tabs.length < 2) break;
           {
             const idx = state.tabs.findIndex((t) => t.id === state.activeId);
             const dir = e.shiftKey ? -1 : 1;
-            const next =
-              state.tabs[(idx + dir + state.tabs.length) % state.tabs.length];
+            const next = state.tabs[(idx + dir + state.tabs.length) % state.tabs.length];
             if (next) chrome.tabs.update(next.id, { active: true });
           }
           break;
@@ -1291,20 +1697,18 @@
         closePalette();
       } else if (state.popups.length) {
         closeAllPopups();
+      } else if ($("history-panel").classList.contains("open")) {
+        closeHistoryPanel();
+      } else if ($("bookmarks-panel").classList.contains("open")) {
+        closeBookmarksPanel();
       }
     } else if (e.altKey) {
-      if (key === "ArrowLeft") {
-        withActiveView((v) => v.back && v.back());
-      } else if (key === "ArrowRight") {
-        withActiveView((v) => v.forward && v.forward());
-      }
+      if (key === "ArrowLeft") withActiveView((v) => v.back && v.back());
+      else if (key === "ArrowRight") withActiveView((v) => v.forward && v.forward());
     } else if (key === "F5") {
       if (state.activeId != null) {
-        if (e.shiftKey) {
-          chrome.tabs.reload(state.activeId, { bypassCache: true });
-        } else {
-          chrome.tabs.reload(state.activeId);
-        }
+        if (e.shiftKey) chrome.tabs.reload(state.activeId, { bypassCache: true });
+        else chrome.tabs.reload(state.activeId);
       }
     }
   }
@@ -1314,9 +1718,7 @@
       vivaldi.tabsPrivate.onKeyboardShortcut.addListener((windowId, shortcut) => {
         if (windowId !== state.windowId) return;
         const s = (shortcut || "").toLowerCase().replace(/\s/g, "");
-        if (s === "ctrl+t") {
-          openPalette("", true);
-        }
+        if (s === "ctrl+t") openPalette("", true);
       });
     }
 
@@ -1328,27 +1730,24 @@
     });
 
     const tabEvts = [
-      "onCreated",
-      "onUpdated",
-      "onRemoved",
-      "onActivated",
-      "onMoved",
-      "onReplaced",
-      "onAttached",
-      "onDetached",
+      "onCreated", "onUpdated", "onRemoved", "onActivated",
+      "onMoved", "onReplaced", "onAttached", "onDetached",
       "onHighlighted",
     ];
     for (const e of tabEvts) {
-      try {
-        chrome.tabs[e].addListener(refreshTabs);
-      } catch (_) {}
+      try { chrome.tabs[e].addListener(refreshTabs); } catch (_) {}
     }
+
+    // Capture screenshot when a tab becomes active
+    chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
+      if (windowId !== state.windowId) return;
+      setTimeout(() => captureTabScreenshot(tabId), 500);
+    });
+
     if (chrome.management) {
       const extEvts = ["onInstalled", "onUninstalled", "onEnabled", "onDisabled"];
       for (const e of extEvts) {
-        try {
-          chrome.management[e].addListener(loadExtensions);
-        } catch (_) {}
+        try { chrome.management[e].addListener(loadExtensions); } catch (_) {}
       }
     }
   }

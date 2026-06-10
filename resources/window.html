@@ -22,9 +22,9 @@
               <div id="zen-clock" class="zen-clock">12:00 PM</div>
               <div id="zen-date" class="zen-date">Monday, January 1</div>
             </div>
-            
+
             <h1 id="zen-greeting" class="zen-greeting">Hello, Gaurish</h1>
-            
+
             <div id="zen-search-wrapper" class="zen-search-wrapper">
               <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
@@ -45,7 +45,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- Add Shortcut Dialog -->
           <dialog id="dial-dialog" class="dial-dialog">
             <div class="dial-dialog-box">
@@ -74,6 +74,18 @@
         </div>
       </main>
 
+      <!-- Tab Preview Floating Card -->
+      <div id="tab-preview" class="tab-preview">
+        <div class="preview-screenshot"></div>
+        <div class="preview-info">
+          <img class="preview-favicon" src="" alt="" />
+          <div class="preview-text">
+            <span class="preview-title"></span>
+            <span class="preview-url"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- Sidebar Toggle Floating Trigger (visible when sidebar is hidden) -->
       <button id="reveal" class="reveal" title="Show sidebar (Ctrl+B)">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -97,6 +109,12 @@
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
           <div class="spacer"></div>
+          <button id="toggle-history" title="History (Ctrl+H)" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </button>
+          <button id="toggle-bookmarks" title="Bookmarks" class="icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          </button>
           <button id="newtab" title="New tab (Ctrl+T)" class="icon accent">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -109,12 +127,48 @@
         <div class="omnibox">
           <div class="omnibox-wrapper">
             <input id="url" type="text" spellcheck="false" placeholder="navigate this tab..." />
+            <button id="bookmark-btn" class="bookmark-btn" title="Bookmark this page (Ctrl+D)" style="display:none">
+              <svg class="bm-outline" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+              <svg class="bm-filled" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            </button>
             <span class="omnibox-hint"><kbd>Ctrl</kbd>+<kbd>L</kbd></span>
           </div>
         </div>
 
         <!-- Vertical Tabs List -->
         <div id="tabs" class="tabs"></div>
+
+        <!-- History Panel (slides over tabs) -->
+        <div id="history-panel" class="side-panel">
+          <div class="panel-header">
+            <button class="panel-back" id="history-back" title="Back to tabs">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+            <span class="panel-title">History</span>
+            <button class="panel-action danger" id="clear-history" title="Clear all history">Clear</button>
+          </div>
+          <div class="panel-search-row">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="history-search" type="text" placeholder="Search history..." autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="history-list" class="panel-list"></div>
+        </div>
+
+        <!-- Bookmarks Panel (slides over tabs) -->
+        <div id="bookmarks-panel" class="side-panel">
+          <div class="panel-header">
+            <button class="panel-back" id="bookmarks-back" title="Back to tabs">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+            <span class="panel-title">Bookmarks</span>
+            <button class="panel-action" id="bookmark-current" title="Bookmark current page">+ Add</button>
+          </div>
+          <div class="panel-search-row">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="bookmarks-search" type="text" placeholder="Search bookmarks..." autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="bookmarks-list" class="panel-list"></div>
+        </div>
 
         <!-- Footer Control Area & Extensions Tray -->
         <div class="sidebar-footer">
@@ -139,10 +193,10 @@
             <input id="palette-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search tabs, bookmarks, history, or enter URL..." />
             <button id="palette-close" class="palette-close" title="Close (Esc)">&times;</button>
           </div>
-          
+
           <!-- Search Results Area -->
           <div id="palette-results" class="palette-results"></div>
-          
+
           <!-- Keyboard shortcuts helper footer -->
           <div class="palette-hint">
             <span><kbd>▲</kbd> <kbd>▼</kbd> navigate</span>
@@ -191,6 +245,13 @@
           <span class="ctx-shortcut">Ctrl+R</span>
         </div>
         <div class="ctx-divider"></div>
+        <div class="ctx-item" data-action="bookmark-page" role="menuitem">
+          <span class="ctx-icon">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          </span>
+          <span class="ctx-label">Bookmark Page</span>
+          <span class="ctx-shortcut">Ctrl+D</span>
+        </div>
         <div class="ctx-item" data-action="copy-url" role="menuitem">
           <span class="ctx-icon">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -219,6 +280,9 @@
           <span class="ctx-shortcut">Ctrl+W</span>
         </div>
       </nav>
+
+      <!-- Toast Notification -->
+      <div id="eyebrow-toast" class="eyebrow-toast"></div>
     </div>
     <script src="ui.js"></script>
   </body>

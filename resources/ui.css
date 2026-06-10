@@ -238,7 +238,7 @@ kbd {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-  padding: 8px 52px 8px 12px;
+  padding: 8px 72px 8px 12px;
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1263,6 +1263,430 @@ kbd {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ─── Bookmark Button in Omnibox ─────────────────── */
+
+.bookmark-btn {
+  position: absolute;
+  right: 36px;
+  background: transparent;
+  border: none;
+  color: var(--fg-mute);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: var(--transition);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.bookmark-btn:hover {
+  color: var(--fg-dim);
+  background: var(--hover);
+}
+
+.bookmark-btn .bm-filled {
+  display: none;
+  color: #f59e0b;
+}
+
+.bookmark-btn.bookmarked .bm-outline {
+  display: none;
+}
+
+.bookmark-btn.bookmarked .bm-filled {
+  display: block;
+}
+
+.bookmark-btn.bookmarked {
+  color: #f59e0b;
+}
+
+/* ─── Side Panels (History / Bookmarks) ──────────── */
+
+.side-panel {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 0 0 16px 16px;
+}
+
+.side-panel.open {
+  transform: translateX(0);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.panel-back {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.panel-back:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-action {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  color: var(--fg-dim);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.panel-action:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-glow);
+}
+
+.panel-action.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.panel-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
+  color: var(--fg-mute);
+}
+
+.panel-search-row input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+  user-select: text;
+}
+
+.panel-search-row input::placeholder {
+  color: var(--fg-mute);
+}
+
+.panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hover-2) transparent;
+}
+
+.panel-list::-webkit-scrollbar {
+  width: 4px;
+}
+.panel-list::-webkit-scrollbar-thumb {
+  background: var(--hover-2);
+  border-radius: 2px;
+}
+
+.panel-group-header {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  padding: 10px 6px 4px;
+}
+
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.panel-item:hover {
+  background: var(--hover);
+  border-color: var(--hairline);
+}
+
+.panel-item:active {
+  transform: scale(0.98);
+}
+
+.panel-item-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.panel-item-icon img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.panel-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-mute);
+}
+
+.panel-item-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.panel-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-item-url {
+  font-size: 10px;
+  color: var(--fg-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.panel-item-time {
+  font-size: 9.5px;
+  color: var(--fg-mute);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.panel-item-del {
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  color: var(--fg-mute);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.panel-item:hover .panel-item-del {
+  opacity: 0.5;
+}
+
+.panel-item-del:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.panel-empty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--fg-mute);
+  font-size: 12px;
+}
+
+/* ─── Tab Drag & Drop ────────────────────────────── */
+
+.tab.dragging {
+  opacity: 0.4;
+  background: var(--accent-soft);
+  border-color: var(--accent-glow) !important;
+}
+
+.tab.drag-over {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  transform: scaleY(1.02);
+}
+
+.tab.drag-over::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* ─── Tab Preview Card ───────────────────────────── */
+
+.tab-preview {
+  position: fixed;
+  left: 294px;
+  top: 80px;
+  width: 260px;
+  background: var(--glass-2);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--hairline-2);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 50;
+  display: none;
+  opacity: 0;
+  transform: translateX(-8px) scale(0.97);
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.tab-preview.open {
+  opacity: 1;
+  transform: none;
+}
+
+.preview-screenshot {
+  width: 100%;
+  height: 140px;
+  background: var(--bg-3);
+  background-size: cover;
+  background-position: center top;
+  border-bottom: 1px solid var(--hairline);
+  display: none;
+  flex-shrink: 0;
+}
+
+.preview-screenshot.has-image {
+  display: block;
+}
+
+.preview-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.preview-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.preview-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-url {
+  font-size: 10px;
+  color: var(--fg-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+}
+
+/* ─── Toast Notification ─────────────────────────── */
+
+.eyebrow-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--glass-2);
+  border: 1px solid var(--hairline-2);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 18px;
+  border-radius: 30px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 500;
+  white-space: nowrap;
+}
+
+.eyebrow-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ─── Context Menu ──────────────────────────────── */
